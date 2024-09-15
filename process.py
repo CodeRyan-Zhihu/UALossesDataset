@@ -7,34 +7,6 @@ from datetime import datetime
 import pandas as pd
 from tqdm import tqdm
 
-progress_file = "progress.json"
-save_progress_file = "save_progress.json"
-duplicate_remove_file = "soldiers_data_source.json"
-unknown_death_remove_file = "soldiers_data_remove_unknown_death_date.json"
-war_death_file = "war_data.csv"
-
-
-with open(progress_file, "r", encoding="utf-8") as f:
-    progress = json.load(f)
-with open(save_progress_file, "r", encoding="utf-8") as f:
-    data = json.load(f)
-
-# 清除重复
-print(len(data))
-duplicate = set()
-remove_duplicate = []
-for item in tqdm(data):
-    if item["Name"] not in duplicate:
-        duplicate.add(item["Name"])
-        remove_duplicate.append(item)
-    else:
-        continue
-print("UA Losses all:", len(remove_duplicate))
-with open(duplicate_remove_file, "w", encoding="utf-8") as f:
-    json.dump(remove_duplicate, f, ensure_ascii=False, indent=True)
-del data
-
-
 # UA Losses的月份简写并不是标准形式
 def format_date(date_str):
     return date_str.replace("Jan.", "January").replace("Feb.", "February").replace("Aug.", "August") \
@@ -67,39 +39,6 @@ def verify_dates(row):
         print(f"No valid date format found in Name field of {row['Name']}")
         return False
 
-
-# 应用清理和验证函数, 找到2022年以后战争死亡
-counter = 0
-for i in tqdm(range(len(remove_duplicate))):
-    # 清理 Name 字段中的换行符和多余空格
-    row = remove_duplicate[i]
-    name_cleaned = re.sub(r'[\n\s]+', ' ', row['Name']).strip()
-    row['Name'] = name_cleaned
-    row['Date of birth'] = format_date(row['Date of birth'])
-    row['Date of death'] = format_date(row['Date of death'])
-    row['Date of burial'] = format_date(row['Date of burial'])
-    if not verify_dates(row):
-        counter += 1
-    else:
-        row['Name'] = re.sub(r'\s*\(.*?\)\s*', '', row['Name']).strip()
-
-temp = pd.DataFrame(remove_duplicate)
-temp.to_csv("soldiers_data_source.csv", index=False, encoding="utf-8")
-
-# 清除死亡时间不明
-remove_unknown_death = []
-for item in tqdm(remove_duplicate):
-    if item["Date of death"] == "?":
-        continue
-    remove_unknown_death.append(item)
-print("Death date existed:", len(remove_unknown_death))
-with open(unknown_death_remove_file, "w", encoding="utf-8") as f:
-    json.dump(remove_unknown_death, f, ensure_ascii=False, indent=True)
-
-# 将 JSON 数据转换为 DataFrame
-df = pd.DataFrame(remove_unknown_death)
-
-
 # 定义日期比较函数
 def is_after_target_date(date_str, target_date):
     try:
@@ -112,13 +51,74 @@ def is_after_target_date(date_str, target_date):
         return False  # 如果日期解析失败，则返回False
 
 
-# 设置目标日期为 2022 年 2 月 24 日
-target_date = datetime(2022, 2, 24)
+if __name__ == '__main__':
+    progress_file = "progress.json"
+    save_progress_file = "save_progress.json"
+    duplicate_remove_file = "soldiers_data_source.json"
+    unknown_death_remove_file = "soldiers_data_remove_unknown_death_date.json"
+    war_death_file = "war_data.csv"
 
-# 筛选出 'Date of death' 晚于目标日期的数据
-filtered_data = df[df['Date of death'].apply(lambda x: is_after_target_date(x, target_date))]
-print("Died after 2022-02-24:", len(filtered_data))
 
-filtered_data.to_csv(war_death_file, index_label="#")
-filtered_data = json.loads(filtered_data.to_json(orient="records", lines=False))
+    with open(progress_file, "r", encoding="utf-8") as f:
+        progress = json.load(f)
+    with open(save_progress_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 清除重复
+    print(len(data))
+    duplicate = set()
+    remove_duplicate = []
+    for item in tqdm(data):
+        if item["Name"] not in duplicate:
+            duplicate.add(item["Name"])
+            remove_duplicate.append(item)
+        else:
+            continue
+    print("UA Losses all:", len(remove_duplicate))
+    with open(duplicate_remove_file, "w", encoding="utf-8") as f:
+        json.dump(remove_duplicate, f, ensure_ascii=False, indent=True)
+    del data
+
+    # 应用清理和验证函数, 找到2022年以后战争死亡
+    counter = 0
+    for i in tqdm(range(len(remove_duplicate))):
+        # 清理 Name 字段中的换行符和多余空格
+        row = remove_duplicate[i]
+        name_cleaned = re.sub(r'[\n\s]+', ' ', row['Name']).strip()
+        row['Name'] = name_cleaned
+        row['Date of birth'] = format_date(row['Date of birth'])
+        row['Date of death'] = format_date(row['Date of death'])
+        row['Date of burial'] = format_date(row['Date of burial'])
+        if not verify_dates(row):
+            counter += 1
+        else:
+            row['Name'] = re.sub(r'\s*\(.*?\)\s*', '', row['Name']).strip()
+
+    temp = pd.DataFrame(remove_duplicate)
+    temp.to_csv("soldiers_data_source.csv", index=False, encoding="utf-8")
+
+    # 清除死亡时间不明
+    remove_unknown_death = []
+    for item in tqdm(remove_duplicate):
+        if item["Date of death"] == "?":
+            continue
+        remove_unknown_death.append(item)
+    print("Death date existed:", len(remove_unknown_death))
+    with open(unknown_death_remove_file, "w", encoding="utf-8") as f:
+        json.dump(remove_unknown_death, f, ensure_ascii=False, indent=True)
+
+    # 将 JSON 数据转换为 DataFrame
+    df = pd.DataFrame(remove_unknown_death)
+
+
+
+    # 设置目标日期为 2022 年 2 月 24 日
+    target_date = datetime(2022, 2, 24)
+
+    # 筛选出 'Date of death' 晚于目标日期的数据
+    filtered_data = df[df['Date of death'].apply(lambda x: is_after_target_date(x, target_date))]
+    print("Died after 2022-02-24:", len(filtered_data))
+
+    filtered_data.to_csv(war_death_file, index_label="#")
+    filtered_data = json.loads(filtered_data.to_json(orient="records", lines=False))
 
